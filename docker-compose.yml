@@ -1,0 +1,19 @@
+version: "3.9"
+services:
+  app:
+    build: .
+    image: {DOCKERHUB_USERNAME}/{DOCKERHUB_REPO}:latest
+    ports: [ "8080:8080" ]
+    environment:
+      WEBRISK_BASE_URL: "http://webrisk-stub:9090"
+      WEBRISK_API_TOKEN: "dummy"
+      THREAT_TYPES: "SOCIAL_ENGINEERING,MALWARE,UNWANTED_SOFTWARE"
+      ALLOW_SCAN: "true"
+    depends_on: [ webrisk-stub ]
+
+  webrisk-stub:
+    image: ghcr.io/wiremock/wiremock:3.6.0
+    ports: [ "9090:9090" ]
+    command: [ "--port","9090","--disable-request-logging" ]
+    volumes:
+      - ./wiremock/mappings:/home/wiremock/mappings:ro
