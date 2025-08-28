@@ -16,7 +16,7 @@ public class SmsEvaluationController {
     @PostMapping(value = "/evaluate", consumes = MediaType.APPLICATION_JSON_VALUE,
         produces = MediaType.APPLICATION_JSON_VALUE)
     public SmsEvaluationResponse evaluate(@Valid @RequestBody SmsEvaluationRequest request) {
-        return service.evaluateBatch(request);
+        return service.evaluate(request);
     }
 }
 

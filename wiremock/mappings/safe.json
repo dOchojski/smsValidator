@@ -1,0 +1,21 @@
+{
+  "priority": 2,
+  "request": {
+    "method": "POST",
+    "urlPath": "/v1eap1:evaluateUri",
+    "bodyPatterns": [
+      { "matchesJsonPath": "$[?(@.uri =~ /.*inpost\\.pl.*/i)]" }
+    ]
+  },
+  "response": {
+    "status": 200,
+    "jsonBody": {
+      "scores": [
+        { "threatType": "MALWARE", "confidenceLevel": "SAFE" }
+      ]
+    },
+    "headers": {
+      "Content-Type": "application/json"
+    }
+  }
+}

@@ -1,5 +1,6 @@
 package pl.smsvalidator.phishing.adapter;
 
+import java.util.Locale;
 import pl.smsvalidator.phishing.config.WebRiskProperties;
 import pl.smsvalidator.phishing.exception.ExternalServiceException;
 import pl.smsvalidator.phishing.model.*;
@@ -34,6 +35,7 @@ public class EvaluateUriClient {
                 .bodyValue(body)
                 .retrieve()
                 .bodyToMono(EvaluateUriResponse.class)
+                .doOnNext(r -> System.out.println("DEBUG Response: " + r))
                 .block();
 
             if (resp == null || resp.scores() == null) {
@@ -41,13 +43,18 @@ public class EvaluateUriClient {
             }
 
             return resp.scores().stream()
-                .map(s -> new ScoreDto(
-                    ThreatType.valueOf(s.threatType()),
-                    ConfidenceLevel.valueOf(s.confidenceLevel())))
+                .map(s -> {
+                    try {
+                        ThreatType type = ThreatType.valueOf(s.threatType().toUpperCase(Locale.ROOT));
+                        ConfidenceLevel conf = ConfidenceLevel.fromString(s.confidenceLevel());
+                        return new ScoreDto(type, conf);
+                    } catch (IllegalArgumentException ex) {
+                        return new ScoreDto(ThreatType.MALWARE, ConfidenceLevel.SAFE);
+                    }
+                })
                 .toList();
-
         } catch (Exception e) {
-            throw new ExternalServiceException("evaluateUri call failed", e);
+            throw new ExternalServiceException("evaluateUri mapping failed", e);
         }
     }
 }

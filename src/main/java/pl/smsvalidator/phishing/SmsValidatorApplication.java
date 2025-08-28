@@ -10,3 +10,4 @@ public class SmsValidatorApplication {
         SpringApplication.run(SmsValidatorApplication.class, args);
     }
 }
+

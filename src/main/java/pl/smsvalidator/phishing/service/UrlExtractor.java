@@ -7,13 +7,17 @@ import java.util.regex.*;
 @Component
 public class UrlExtractor {
     private static final Pattern URL_PATTERN = Pattern.compile(
-        "(?i)\\b((?:https?://)[\\p{L}0-9\\-._~:/?#\\[\\]@!$&'()*+,;=%]+)");
+        "(?i)(https?://[\\p{L}0-9\\-._~:/?#\\[\\]@!$&'()*+,;=%]+)");
 
     public List<String> extract(String text) {
+        Matcher matcher = URL_PATTERN.matcher(text);
         List<String> urls = new ArrayList<>();
         Matcher m = URL_PATTERN.matcher(text);
-        while (m.find())
-            urls.add(m.group(1));
+        while (matcher.find()) {
+            String url = matcher.group();
+            url = url.replaceAll("[,.;!?]+$", "");
+            urls.add(url);
+        }
         return urls;
     }
 }

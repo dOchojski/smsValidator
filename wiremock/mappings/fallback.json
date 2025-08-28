@@ -5,9 +5,6 @@
   },
   "response": {
     "status": 200,
-    "headers": {
-      "Content-Type": "application/json"
-    },
     "jsonBody": {
       "scores": [
         {
@@ -15,6 +12,9 @@
           "confidenceLevel": "SAFE"
         }
       ]
+    },
+    "headers": {
+      "Content-Type": "application/json"
     }
   }
 }

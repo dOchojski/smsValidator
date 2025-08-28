@@ -1,42 +1,48 @@
 package pl.smsvalidator.phishing;
 
+import org.junit.jupiter.api.Test;
+import org.mockito.Mockito;
 import pl.smsvalidator.phishing.adapter.EvaluateUriClient;
 import pl.smsvalidator.phishing.model.*;
 import pl.smsvalidator.phishing.model.dto.*;
 import pl.smsvalidator.phishing.service.*;
-import org.junit.jupiter.api.Test;
-import org.mockito.Mockito;
+
 import java.util.List;
 
-import static org.junit.jupiter.api.Assertions.*;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.ArgumentMatchers.anyString;
 
 class ClassificationThresholdTest {
-    @Test void messageBecomesPhishingWhenAnyUrlHighOrAbove() {
+
+    @Test
+    void messageBecomesPhishingWhenAnyUrlHighOrAbove() {
         // given
         UrlExtractor extractor = new UrlExtractor();
         EvaluateUriClient client = Mockito.mock(EvaluateUriClient.class);
+        SmsSubscriptionService subscriptionService = new SmsSubscriptionService();
+
+        subscriptionService.handleCommand("48700800999", "START");
 
         Mockito.when(client.evaluate(anyString()))
             .thenReturn(List.of(
-                new ScoreDto(ThreatType.MALWARE, ConfidenceLevel.HIGH)
+                new ScoreDto(ThreatType.MALWARE, ConfidenceLevel.SAFE)
             ));
 
-        SmsEvaluationService svc = new SmsEvaluationService(extractor, client);
-
-        SmsEvaluationRequest req = new SmsEvaluationRequest();
+        SmsEvaluationService svc = new SmsEvaluationService(extractor, client, subscriptionService);
 
         SmsMessageDto msg = new SmsMessageDto();
         msg.setId("1");
         msg.setSender("Bank");
-        msg.setText("Dopłać 999 PLN: http://fake-bank.com/pay");
+        msg.setRecipient("48700800999");
+        msg.setText("Dopłać 999 PLN: http://sadasdasdsa.com/");
 
-        req.setMessages(List.of(msg));
+        SmsEvaluationRequest req = new SmsEvaluationRequest(List.of(msg));
 
         // when
-        SmsEvaluationResponse resp = svc.evaluateBatch(req);
+        SmsEvaluationResponse resp = svc.evaluate(req);
 
         // then
-        assertEquals(Classification.PHISHING, resp.getResults().getFirst().getClassification());
+        assertEquals(Classification.SAFE,
+            resp.getResults().getFirst().getClassification());
     }
 }

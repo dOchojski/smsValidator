@@ -1,19 +1,26 @@
 version: "3.9"
+
 services:
   app:
-    build: .
-    image: {DOCKERHUB_USERNAME}/{DOCKERHUB_REPO}:latest
-    ports: [ "8080:8080" ]
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: dochojski/phishing-sms:local   # spójna nazwa obrazu
+    container_name: phishing-sms-app
+    ports:
+      - "18080:8080"   # host:container → app dostępny pod http://localhost:18080
     environment:
-      WEBRISK_BASE_URL: "http://webrisk-stub:9090"
+      WEBRISK_BASE_URL: "http://webrisk-stub:8080"
       WEBRISK_API_TOKEN: "dummy"
       THREAT_TYPES: "SOCIAL_ENGINEERING,MALWARE,UNWANTED_SOFTWARE"
       ALLOW_SCAN: "true"
-    depends_on: [ webrisk-stub ]
-
+    depends_on:
+      - webrisk-stub   # app wystartuje po starcie stubu
   webrisk-stub:
-    image: ghcr.io/wiremock/wiremock:3.6.0
-    ports: [ "9090:9090" ]
-    command: [ "--port","9090","--disable-request-logging" ]
+    image: wiremock/wiremock:3.6.0
+    container_name: webrisk-stub
+    ports:
+      - "9090:8080"
+    command: ["--disable-request-logging"]
     volumes:
       - ./wiremock/mappings:/home/wiremock/mappings:ro

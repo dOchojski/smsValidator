@@ -13,13 +13,24 @@ public class SmsEvaluationService {
 
     private final UrlExtractor urlExtractor;
     private final EvaluateUriClient evaluateUriClient;
+    private final SmsSubscriptionService subscriptionService;
 
     private static final ConfidenceLevel THRESHOLD = ConfidenceLevel.HIGH;
 
-    public SmsEvaluationResponse evaluateBatch(SmsEvaluationRequest req) {
+    public SmsEvaluationResponse evaluate(SmsEvaluationRequest req) {
         List<MessageResultDto> results = new ArrayList<>();
 
         req.getMessages().forEach(msg -> {
+            subscriptionService.handleCommand(msg.getRecipient(), msg.getText());
+            if (!subscriptionService.isActive(msg.getRecipient())) {
+                results.add(new MessageResultDto(
+                    msg.getId(),
+                    Classification.SAFE,
+                    List.of()
+                ));
+                return;
+            }
+
             List<String> urls = urlExtractor.extract(msg.getText());
             List<UrlEvaluationDto> urlEvaluations = new ArrayList<>();
             boolean risky = false;
