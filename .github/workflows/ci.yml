@@ -1,45 +1,49 @@
-name: CI
+name: CI/CD Pipeline
 
 on:
-  push: { branches: [ "main" ] }
-  pull_request: {}
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
 
 jobs:
-  build-test-docker:
+  build:
     runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
 
-      - name: Set up JDK
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 21
         uses: actions/setup-java@v4
         with:
-          distribution: temurin
           java-version: '21'
-          cache: 'maven'
+          distribution: 'temurin'
+          cache: maven
 
-      - name: Build & Test
-        run: mvn -B -DskipITs=false clean verify
+      - name: Build with Maven
+        run: mvn -B verify --file pom.xml
 
-      - name: Docker meta
-        id: meta
-        uses: docker/metadata-action@v5
-        with:
-          images: |
-            {DOCKERHUB_USERNAME}/{DOCKERHUB_REPO}
-          tags: |
-            type=raw,value=latest
-            type=sha,prefix=sha-
-
-      - name: Login to DockerHub
+      - name: Log in to DockerHub
         uses: docker/login-action@v3
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
-      - name: Build and push
-        uses: docker/build-push-action@v6
-        with:
-          context: .
-          push: true
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
+      - name: Build Docker image
+        run: |
+          IMAGE=dochojski/phishing-sms
+          VERSION=0.1.0
+          GIT_SHA=$(echo $GITHUB_SHA | cut -c1-7)
+
+          docker build -t $IMAGE:latest -t $IMAGE:$VERSION -t $IMAGE:$GIT_SHA .
+
+      - name: Push Docker image
+        run: |
+          IMAGE=dochojski/phishing-sms
+          VERSION=0.1.0
+          GIT_SHA=$(echo $GITHUB_SHA | cut -c1-7)
+
+          docker push $IMAGE:latest
+          docker push $IMAGE:$VERSION
+          docker push $IMAGE:$GIT_SHA
