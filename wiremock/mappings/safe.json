@@ -4,14 +4,19 @@
     "method": "POST",
     "urlPath": "/v1eap1:evaluateUri",
     "bodyPatterns": [
-      { "matchesJsonPath": "$[?(@.uri =~ /.*inpost\\.pl.*/i)]" }
+      {
+        "matchesJsonPath": "$[?(@.uri =~ /.*inpost\\.pl.*/i)]"
+      }
     ]
   },
   "response": {
     "status": 200,
     "jsonBody": {
       "scores": [
-        { "threatType": "MALWARE", "confidenceLevel": "SAFE" }
+        {
+          "threatType": "MALWARE",
+          "confidenceLevel": "SAFE"
+        }
       ]
     },
     "headers": {

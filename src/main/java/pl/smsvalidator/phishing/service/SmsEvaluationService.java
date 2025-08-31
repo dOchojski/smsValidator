@@ -1,54 +1,68 @@
 package pl.smsvalidator.phishing.service;
 
-import pl.smsvalidator.phishing.adapter.EvaluateUriClient;
-import pl.smsvalidator.phishing.model.*;
-import pl.smsvalidator.phishing.model.dto.*;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
-import java.util.*;
+import pl.smsvalidator.phishing.exception.ExternalServiceException;
+import pl.smsvalidator.phishing.model.Classification;
+import pl.smsvalidator.phishing.model.ConfidenceLevel;
+import pl.smsvalidator.phishing.model.dto.external.EvaluateUriResponse;
+import pl.smsvalidator.phishing.model.dto.internal.*;
+import pl.smsvalidator.phishing.web.EvaluateUriClient;
+
+import java.util.ArrayList;
+import java.util.List;
 
 @Service
 @RequiredArgsConstructor
 public class SmsEvaluationService {
 
-    private final UrlExtractor urlExtractor;
+    private final UrlExtractorService urlExtractorService;
     private final EvaluateUriClient evaluateUriClient;
     private final SmsSubscriptionService subscriptionService;
 
-    private static final ConfidenceLevel THRESHOLD = ConfidenceLevel.HIGH;
+    public void subscribe(SmsSubscriptionRequest request) {
+        subscriptionService.setSubscriptionToRecipient(request.recipient(), request.subscriptionMode());
+    }
 
-    public SmsEvaluationResponse evaluate(SmsEvaluationRequest req) {
-        List<MessageResultDto> results = new ArrayList<>();
+    public SmsEvaluationResponse evaluate(SmsEvaluationRequest request) {
+        List<MessageResultDto> results = request.messages()
+                .stream()
+                .filter(this::isRecipientSubscribed)
+                .map(this::processMessage)
+                .toList();
 
-        req.getMessages().forEach(msg -> {
-            subscriptionService.handleCommand(msg.getRecipient(), msg.getText());
-            if (!subscriptionService.isActive(msg.getRecipient())) {
-                results.add(new MessageResultDto(
-                    msg.getId(),
-                    Classification.SAFE,
-                    List.of()
-                ));
-                return;
-            }
-
-            List<String> urls = urlExtractor.extract(msg.getText());
-            List<UrlEvaluationDto> urlEvaluations = new ArrayList<>();
-            boolean risky = false;
-
-            for (String url : urls) {
-                List<ScoreDto> scores = evaluateUriClient.evaluate(url);
-                urlEvaluations.add(new UrlEvaluationDto(url, scores));
-
-                boolean anyHighOrAbove = scores.stream()
-                    .anyMatch(s -> s.getConfidence().atLeast(THRESHOLD));
-                risky = risky || anyHighOrAbove;
-            }
-
-            results.add(new MessageResultDto(
-                msg.getId(),
-                risky ? Classification.PHISHING : Classification.SAFE,
-                urlEvaluations));
-        });
         return new SmsEvaluationResponse(results);
+    }
+
+    private boolean isRecipientSubscribed(SmsMessageDto message) {
+        return subscriptionService.isSubscriptionActive(message.recipient());
+    }
+
+    private MessageResultDto processMessage(SmsMessageDto message) {
+        List<String> urls = urlExtractorService.extract(message.text());
+
+        List<UrlEvaluationDto> urlEvaluations = new ArrayList<>();
+        Classification classification = Classification.SAFE;
+
+        for (String url : urls) {
+            EvaluateUriResponse evaluateResponse = evaluateUriClient.evaluate(url);
+            if (evaluateResponse == null) {
+                throw new ExternalServiceException("Couldn't retrieve evaluate URI response");
+            }
+
+            List<EvaluateUriResponse.Score> scores = evaluateResponse.scores();
+            urlEvaluations.add(new UrlEvaluationDto(url, scores));
+
+            boolean anyHighOrAbove = scores
+                    .stream()
+                    .map(EvaluateUriResponse.Score::confidenceLevel)
+                    .anyMatch(ConfidenceLevel::atLeastHigh);
+
+            if (anyHighOrAbove) {
+                classification = Classification.PHISHING;
+            }
+        }
+
+        return new MessageResultDto(message.id(), classification, urlEvaluations);
     }
 }

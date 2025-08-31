@@ -1,5 +1,8 @@
 package pl.smsvalidator.phishing.model;
 
 public enum ThreatType {
-    SOCIAL_ENGINEERING, MALWARE, UNWANTED_SOFTWARE
+    THREAT_TYPE_UNSPECIFIED,
+    SOCIAL_ENGINEERING,
+    MALWARE,
+    UNWANTED_SOFTWARE
 }

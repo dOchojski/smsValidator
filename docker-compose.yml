@@ -5,17 +5,16 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    image: dochojski/phishing-sms:local   # spójna nazwa obrazu
+    image: dochojski/phishing-sms:local
     container_name: phishing-sms-app
     ports:
-      - "18080:8080"   # host:container → app dostępny pod http://localhost:18080
+      - "18080:8080"
     environment:
       WEBRISK_BASE_URL: "http://webrisk-stub:8080"
       WEBRISK_API_TOKEN: "dummy"
-      THREAT_TYPES: "SOCIAL_ENGINEERING,MALWARE,UNWANTED_SOFTWARE"
       ALLOW_SCAN: "true"
     depends_on:
-      - webrisk-stub   # app wystartuje po starcie stubu
+      - webrisk-stub
   webrisk-stub:
     image: wiremock/wiremock:3.6.0
     container_name: webrisk-stub

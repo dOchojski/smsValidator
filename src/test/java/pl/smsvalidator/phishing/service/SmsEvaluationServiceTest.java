@@ -1,62 +1,97 @@
 package pl.smsvalidator.phishing.service;
 
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.ArgumentMatchers.anyString;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.when;
-
-import java.util.List;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import pl.smsvalidator.phishing.adapter.EvaluateUriClient;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.InjectMocks;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
 import pl.smsvalidator.phishing.model.Classification;
 import pl.smsvalidator.phishing.model.ConfidenceLevel;
 import pl.smsvalidator.phishing.model.ThreatType;
-import pl.smsvalidator.phishing.model.dto.ScoreDto;
-import pl.smsvalidator.phishing.model.dto.SmsEvaluationRequest;
-import pl.smsvalidator.phishing.model.dto.SmsEvaluationResponse;
-import pl.smsvalidator.phishing.model.dto.SmsMessageDto;
+import pl.smsvalidator.phishing.model.dto.external.EvaluateUriResponse;
+import pl.smsvalidator.phishing.model.dto.internal.SmsEvaluationRequest;
+import pl.smsvalidator.phishing.model.dto.internal.SmsEvaluationResponse;
+import pl.smsvalidator.phishing.model.dto.internal.SmsMessageDto;
+import pl.smsvalidator.phishing.model.dto.internal.UrlEvaluationDto;
+import pl.smsvalidator.phishing.web.EvaluateUriClient;
 
+import java.util.List;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.Mockito.when;
+
+@ExtendWith(MockitoExtension.class)
 class SmsEvaluationServiceTest {
 
-    private final UrlExtractor extractor = new UrlExtractor();
-    private final EvaluateUriClient client = mock(EvaluateUriClient.class);
-    private final SmsSubscriptionService subscriptionService = new SmsSubscriptionService();
+    @Mock
+    private UrlExtractorService extractor;
+
+    @Mock
+    private EvaluateUriClient client;
+
+    @Mock
+    private SmsSubscriptionService subscriptionService;
+
+    @InjectMocks
     private SmsEvaluationService service;
-
-    @BeforeEach
-    void setUp() {
-        service = new SmsEvaluationService(extractor, client, subscriptionService);
-        subscriptionService.handleCommand("48700800999", "START");
-    }
-
 
     @Test
     void shouldClassifyAsPhishingWhenHighConfidence() {
-        SmsMessageDto msg = new SmsMessageDto("1", "Bank", "48700800999", "Sprawdź: http://bad.com");
-        SmsEvaluationRequest req = new SmsEvaluationRequest(List.of(msg));
+        //given
+        String url = "http://bad.com";
+        List<EvaluateUriResponse.Score> scores = List.of(new EvaluateUriResponse.Score(ThreatType.MALWARE, ConfidenceLevel.HIGH));
+        SmsMessageDto message = new SmsMessageDto("1", "Bank", "48700800999", "Sprawdź: http://bad.com");
+        SmsEvaluationRequest request = new SmsEvaluationRequest(List.of(message));
 
-        when(client.evaluate(anyString()))
-            .thenReturn(List.of(new ScoreDto(ThreatType.MALWARE, ConfidenceLevel.HIGHER)));
+        when(extractor.extract(message.text())).thenReturn(List.of(url));
+        when(client.evaluate(url)).thenReturn(new EvaluateUriResponse(scores));
+        when(subscriptionService.isSubscriptionActive("48700800999")).thenReturn(Boolean.TRUE);
 
-        SmsEvaluationResponse resp = service.evaluate(req);
+        //when
+        SmsEvaluationResponse response = service.evaluate(request);
 
-        assertThat(resp.getResults()).hasSize(1);
-        assertThat(resp.getResults().get(0).getClassification()).isEqualTo(Classification.PHISHING);
+        //then
+        assertThat(response.results()).hasSize(1);
+        assertThat(response.results().getFirst().id()).isEqualTo("1");
+        assertThat(response.results().getFirst().classification()).isEqualTo(Classification.PHISHING);
+        assertThat(response.results().getFirst().urls()).isEqualTo(List.of(new UrlEvaluationDto(url, scores)));
     }
 
     @Test
     void shouldClassifyAsSafeWhenBelowThreshold() {
-        SmsMessageDto msg =
-            new SmsMessageDto("2", "InPost", "48700800999", "Śledzenie: https://inpost.pl/tracking/ABC");
-        SmsEvaluationRequest req = new SmsEvaluationRequest(List.of(msg));
+        //given
+        String url = "http://good.com";
+        List<EvaluateUriResponse.Score> scores = List.of(new EvaluateUriResponse.Score(ThreatType.MALWARE, ConfidenceLevel.LOW));
+        SmsMessageDto message = new SmsMessageDto("1", "Bank", "48700800999", "Sprawdź: http://good.com");
+        SmsEvaluationRequest request = new SmsEvaluationRequest(List.of(message));
 
-        when(client.evaluate(anyString()))
-            .thenReturn(List.of(new ScoreDto(ThreatType.MALWARE, ConfidenceLevel.SAFE)));
+        when(extractor.extract(message.text())).thenReturn(List.of(url));
+        when(client.evaluate(url)).thenReturn(new EvaluateUriResponse(scores));
+        when(subscriptionService.isSubscriptionActive("48700800999")).thenReturn(Boolean.TRUE);
 
-        SmsEvaluationResponse resp = service.evaluate(req);
+        //when
+        SmsEvaluationResponse response = service.evaluate(request);
 
-        assertThat(resp.getResults()).hasSize(1);
-        assertThat(resp.getResults().get(0).getClassification()).isEqualTo(Classification.SAFE);
+        //then
+        assertThat(response.results()).hasSize(1);
+        assertThat(response.results().getFirst().id()).isEqualTo("1");
+        assertThat(response.results().getFirst().classification()).isEqualTo(Classification.SAFE);
+        assertThat(response.results().getFirst().urls()).isEqualTo(List.of(new UrlEvaluationDto(url, scores)));
+    }
+
+    @Test
+    void shouldThrowExceptionWhenCouldNotRetrieveEvaluateUriResponseFromExternalClient() {
+        //given
+        String url = "http://good.com";
+        SmsMessageDto message = new SmsMessageDto("1", "Bank", "48700800999", "Sprawdź: http://good.com");
+        SmsEvaluationRequest request = new SmsEvaluationRequest(List.of(message));
+
+        when(extractor.extract(message.text())).thenReturn(List.of(url));
+        when(client.evaluate(url)).thenReturn(null);
+        when(subscriptionService.isSubscriptionActive("48700800999")).thenReturn(Boolean.TRUE);
+
+        //expect
+        assertThatThrownBy(() -> service.evaluate(request), "Couldn't retrieve evaluate URI response");
     }
 }

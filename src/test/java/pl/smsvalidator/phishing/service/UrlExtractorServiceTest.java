@@ -1,16 +1,17 @@
-package pl.smsvalidator.phishing;
+package pl.smsvalidator.phishing.service;
 
-import pl.smsvalidator.phishing.service.UrlExtractor;
 import org.junit.jupiter.api.Test;
+
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.*;
 
-class UrlExtractorTest {
+class UrlExtractorServiceTest {
 
-    UrlExtractor extractor = new UrlExtractor();
+    UrlExtractorService extractor = new UrlExtractorService();
 
-    @Test void extractsMultipleUrls() {
+    @Test
+    void extractsMultipleUrls() {
         String text = "Dopłać 999zł: http://pekao-pl.com/verify oraz https://inpost.pl/tracking/ABC";
         List<String> urls = extractor.extract(text);
         assertEquals(2, urls.size());
