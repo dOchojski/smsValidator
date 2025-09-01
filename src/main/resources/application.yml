@@ -1,0 +1,12 @@
+server:
+  port: 8080
+
+webrisk:
+  base-url: ${WEBRISK_BASE_URL:https://webrisk.googleapis.com}
+  api-token: ${WEBRISK_API_TOKEN:token-not-set}
+  allow-scan: ${ALLOW_SCAN:false}
+  threat-types:
+    - SOCIAL_ENGINEERING
+    - MALWARE
+    - UNWANTED_SOFTWARE
+  timeout-ms: 5000

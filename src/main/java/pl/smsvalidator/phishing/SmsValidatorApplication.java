@@ -9,5 +9,5 @@ public class SmsValidatorApplication {
     public static void main(String[] args) {
         SpringApplication.run(SmsValidatorApplication.class, args);
     }
-
 }
+
