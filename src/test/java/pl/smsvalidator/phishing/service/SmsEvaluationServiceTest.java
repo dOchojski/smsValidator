@@ -94,4 +94,28 @@ class SmsEvaluationServiceTest {
         //expect
         assertThatThrownBy(() -> service.evaluate(request), "Couldn't retrieve evaluate URI response");
     }
+
+    @Test
+    void shouldHandleNullScores() {
+        //given
+        String url = "http://aaaa.com";
+        SmsMessageDto message = new SmsMessageDto("1", "Bank", "48700800999", "Sprawdź: http://aaaa.com");
+        SmsEvaluationRequest request = new SmsEvaluationRequest(List.of(message));
+
+        when(extractor.extract(message.text())).thenReturn(List.of(url));
+        when(client.evaluate(url)).thenReturn(new EvaluateUriResponse(null)); // null scores
+        when(subscriptionService.isSubscriptionActive("48700800999")).thenReturn(Boolean.TRUE);
+
+        //when
+        SmsEvaluationResponse response = service.evaluate(request);
+
+        //then
+        assertThat(response.results()).hasSize(1);
+        assertThat(response.results().getFirst().id()).isEqualTo("1");
+        assertThat(response.results().getFirst().classification())
+            .isEqualTo(Classification.SAFE);
+        assertThat(response.results().getFirst().urls())
+            .isEqualTo(List.of(new UrlEvaluationDto(url, List.of())));
+    }
+
 }

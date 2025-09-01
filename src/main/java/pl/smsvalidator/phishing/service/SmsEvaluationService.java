@@ -55,6 +55,11 @@ public class SmsEvaluationService {
             }
 
             List<EvaluateUriResponse.Score> scores = evaluateResponse.scores();
+            if (scores == null || scores.isEmpty()) {
+                urlEvaluations.add(new UrlEvaluationDto(url, List.of()));
+                continue;
+            }
+
             urlEvaluations.add(new UrlEvaluationDto(url, scores));
 
             boolean anyHighOrAbove = scores
