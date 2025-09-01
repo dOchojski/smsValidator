@@ -8,11 +8,12 @@ services:
     image: dochojski/phishing-sms:local
     container_name: phishing-sms-app
     ports:
-      - "18080:8080"
+      - "8080:8080"
     environment:
       WEBRISK_BASE_URL: "http://webrisk-stub:8080"
       WEBRISK_API_TOKEN: "dummy"
       ALLOW_SCAN: "true"
+      SPRING_PROFILES_ACTIVE: default
     depends_on:
       - webrisk-stub
   webrisk-stub:
