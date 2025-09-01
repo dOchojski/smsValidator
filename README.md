@@ -1,55 +1,74 @@
-# 📱 SMS Validator
+# SMS Validator
 
-Prosty serwis napisany, którego celem jest analiza treści SMS-ów i wykrywanie potencjalnych prób phishingu.
+**SMS Validator** to prosty serwis napisany w Javie, którego celem jest analiza treści SMS‑ów i wykrywanie potencjalnych prób phishingu. 
+Aplikacja wyłuskuje linki z wiadomości, sprawdza je za pomocą zewnętrznego serwisu oceniającego (Google WebRisk lub stub WireMock)
+,oznacza wiadomości jako bezpieczne lub phishingowe. Dodatkowo użytkownicy mogą włączać/wyłączać 
+filtrowanie wiadomości za pomocą komend **START** / **STOP**.
 
 ---
 
 ## ✨ Funkcjonalności
-- Obsługa wielu SMS-ów w jednym żądaniu (batch).
+- Obsługa wielu SMS‑ów w jednym żądaniu.
 - Ekstrakcja adresów URL z treści wiadomości.
-- Integracja z zewnętrznym serwisem `evaluateUri` (zasymulowanym przez **WireMock**).
-- Klasyfikacja SMS jako:
-    - **PHISHING** – jeśli choć jeden URL ma `confidenceLevel >= HIGH`.
-    - **SAFE** – w pozostałych przypadkach.
-- Obsługa komend **START** / **STOP**:
+- Integracja z zewnętrznym serwisem **`evaluateUri`** (domyślnie zasymulowanym przez WireMock, w środowisku produkcyjnym może to być Google WebRisk).
+- Klasyfikacja wiadomości:
+    - **PHISHING** – jeżeli dla przynajmniej jednego adresu URL poziom zaufania (`confidenceLevel`) jest wysoki (`HIGH` lub wyższy).
+    - **SAFE** – we wszystkich pozostałych przypadkach.
+- Obsługa komend **START** / **STOP** przez osobny endpoint:
     - `START` – włącza usługę filtrowania dla numeru odbiorcy.
     - `STOP` – wyłącza usługę filtrowania dla numeru odbiorcy.
-- REST API (`/api/v1/sms/evaluate`).
+- REST API:
+    - `POST /api/v1/sms/evaluate` – przetwarza listę wiadomości i zwraca listę wyników z klasyfikacją oraz oceną poszczególnych adresów URL
+    - `POST /api/v1/sms/subscribe` – ustawia stan subskrypcji (START/STOP) dla odbiorcy.
 - Gotowy obraz Dockera dostępny w **Docker Hub**.
 
 ---
 
-## 🏗 Architektura
-Warstwy projektu:
-- **Controller** – przyjmuje żądania HTTP.
-- **Service** – logika biznesowa (ekstrakcja URL, klasyfikacja, START/STOP).
-- **Adapter** – komunikacja z zewnętrznym serwisem (`evaluateUri`).
-- **Stub (WireMock)** – symuluje Google WebRisk API.
+## 🧱 Architektura
+Projekt jest zbudowany w oparciu o architekturę warstwową:
+
+- **Controller** – przyjmuje żądania HTTP i zwraca odpowiedzi
+- **Service** – zawiera logikę biznesową: 
+  - ekstrakcja URL‑i z treści wiadomości
+  - wywołanie zewnętrznego serwisu `evaluateUri`
+  - klasyfikacja wiadomości oraz obsługa subskrypcji
+- **Web/Adapter** – implementacja klienta `evaluateUri`. W profilu `local` używany jest `DummyEvaluateUriClient`, który zwraca stały wynik, a w pozostałych profilach `EvaluateUriClient` wywołuje rzeczywiste API Google WebRisk (lub stub WireMock)
+- **Stub (WireMock)** – symuluje odpowiedzi Google WebRisk na podstawie prostych reguł. Mappingi znajdują się w katalogu `wiremock/mappings`
 
 ### Przepływ
-1. Klient wywołuje `POST /api/v1/sms/evaluate`
-2. Serwis wyciąga URL-e z treści.
-3. Dla każdego URL → zapytanie do `evaluateUri` (WireMock).
-4. Wynik oceny mapowany na klasyfikację SMS.
-5. Zwracana lista wyników.
+1. Klient wysyła żądanie `POST /api/v1/sms/evaluate` z listą wiadomości
+2. Serwis wyłuskuje adresy URL z treści każdej wiadomości.
+3. Dla każdego URL‑a serwis wysyła zapytanie do `evaluateUri`
+4. Otrzymane(`scores`) mapowane są na ogólną klasyfikację wiadomości (PHISHING/SAFE)
+5. Zwracana jest lista wyników (`results`), zawierająca ID wiadomości, klasyfikację i ocenę poszczególnych adresów URL
 
 ---
 
 ## ⚙️ Konfiguracja
-Zmienne środowiskowe (z `docker-compose.yml`):
-- `WEBRISK_BASE_URL` – adres serwisu evaluateUri (stub).
-- `WEBRISK_API_TOKEN` – token autoryzacyjny (dummy w tej wersji).
-- `THREAT_TYPES` – lista typów zagrożeń (domyślnie `SOCIAL_ENGINEERING,MALWARE,UNWANTED_SOFTWARE`).
-- `ALLOW_SCAN` – `true/false`.
+Parametry serwisu konfiguruje się za pomocą zmiennych środowiskowych (patrz `application.yml` oraz `docker-compose.yml`)
+
+| Zmienna | Opis | Wartość domyślna |
+|---|---|---|
+| `WEBRISK_BASE_URL` | adres serwisu `evaluateUri` (np. stub WireMock) | `https://webrisk.googleapis.com` |
+| `WEBRISK_API_TOKEN` | token autoryzacyjny używany przez klienta `evaluateUri` | `token-not-set` |
+| `ALLOW_SCAN` | flaga `true/false` przekazywana do Google WebRisk | `false` |
+| `THREAT_TYPES` | lista typów zagrożeń rozpoznawanych przez API (`SOCIAL_ENGINEERING`, `MALWARE`, `UNWANTED_SOFTWARE`) | `SOCIAL_ENGINEERING,MALWARE,UNWANTED_SOFTWARE` |
+
+Pozostałe parametry, takie jak `timeout-ms` (czas oczekiwania na odpowiedź) czy port serwera (`server.port`), można ustawiać w pliku `application.yml`.
 
 ---
 
-## 🐳 Uruchamianie
+## 🏃‍♂️ Uruchamianie
 
-### Opcja 1. Lokalnie z Dockera Hub
-Pobranie obrazu i uruchomienie:
+### Opcja 1. Użycie obrazu z Docker Hub
+Aby szybko uruchomić aplikację, można skorzystać z gotowego obrazu:
+
 ```bash
+# pobierz obraz
 docker pull dochojski/phishing-sms:latest
+
+# uruchom aplikację na porcie 18080 wraz z lokalnym stubem webrisk
+# pamiętaj, że webrisk-stub musi być dostępny; można użyć docker-compose
 docker run -p 18080:8080 \
   -e WEBRISK_BASE_URL=http://webrisk-stub:8080 \
   -e WEBRISK_API_TOKEN=dummy \
@@ -58,18 +77,28 @@ docker run -p 18080:8080 \
   dochojski/phishing-sms:latest
 ```
 
+### Opcja 2. Uruchomienie przez docker-compose
 
-## 📚 Dodatkowe założenia
+W repozytorium znajduje się plik docker-compose.yml, który startuje zarówno aplikację, jak i stub WireMock:
 
-1. TART/STOP zapamiętywane w pamięci RAM (in-memory). W wersji produkcyjnej należałoby użyć DB/Redis.
-2. Zewnętrzny serwis evaluateUri zasymulowany przez WireMock → brak kosztów za prawdziwy WebRisk.
-3. Mappingi phishing/safe oparte o proste reguły domenowe/keywordy.
-
-## 🔎 Przykłady użycia API
 ```bash
+docker-compose up --build
+# aplikacja dostępna będzie pod adresem http://localhost:8080
+```
+## 📌 Założenia i uproszczenia
 
-Request
-curl -X POST "http://localhost:18080/api/v1/sms/evaluate" \
+Stan subskrypcji (komendy START/STOP) przechowywany jest w pamięci (mapa ConcurrentHashMap). W wersji produkcyjnej należałoby użyć bazy danych
+
+Zewnętrzny serwis evaluateUri jest zasymulowany przez WireMock
+
+Mappingi phishing/safe w plikach phishing.json i safe.json bazują na prostych regułach. Dodatkowa konfiguracja znajduje się w katalogu wiremock/mappings.
+
+
+## 🧪 Przykłady użycia API
+
+```bash
+# Zapytanie
+curl -X POST "http://localhost:8080/api/v1/sms/evaluate" \
   -H "Content-Type: application/json" \
   -d '{
     "messages": [
@@ -78,7 +107,7 @@ curl -X POST "http://localhost:18080/api/v1/sms/evaluate" \
     ]
   }'
 
-Response
+# Odpowiedź
 {
   "results": [
     {
@@ -88,7 +117,7 @@ Response
         {
           "url": "http://bank-pl.com/verify",
           "scores": [
-            { "threatType": "SOCIAL_ENGINEERING", "confidence": "HIGHER" }
+            { "threatType": "SOCIAL_ENGINEERING", "confidenceLevel": "HIGHER" }
           ]
         }
       ]
@@ -100,11 +129,23 @@ Response
         {
           "url": "https://inpost.pl/tracking/ABC",
           "scores": [
-            { "threatType": "MALWARE", "confidence": "SAFE" }
+            { "threatType": "MALWARE", "confidenceLevel": "SAFE" }
           ]
         }
       ]
     }
   ]
 }
+```
+
+```bash
+# Włączenie filtrowania dla numeru
+curl -X POST "http://localhost:8080/api/v1/sms/subscribe" \
+  -H "Content-Type: application/json" \
+  -d '{ "recipient": "48700800999", "subscriptionMode": "START" }'
+
+# Wyłączenie filtrowania
+curl -X POST "http://localhost:8080/api/v1/sms/subscribe" \
+  -H "Content-Type: application/json" \
+  -d '{ "recipient": "48700800999", "subscriptionMode": "STOP" }'
 ```
